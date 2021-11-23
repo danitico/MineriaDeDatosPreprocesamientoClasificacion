@@ -1,0 +1,431 @@
+---
+title: Support Vector Machine (SVM)
+# theme: CambridgeUS
+theme: Montpellier
+author: |
+      Minería de Datos: Preprocesamiento y clasificación
+date: Máster en Ciencias de Datos e Ingeniería de Computadores
+toc-title: Tabla de Contenidos
+toc: true
+# classoption: compress
+output:
+  beamer_presentation:
+    slide_level: 2
+    includes:
+      in_header: ./simple.txt
+---
+
+# Clasificación binaria con hiperplano
+
+## Introducción
+
+Se trata de un método desarrollado en la década de los 90, como un
+método de clasificación binaria. Posteriormente, su aplicación se ha
+extendido a problemas de clasificación múltiple y de regresión.
+  
+Aplica el concepto de **hiperplano de máximo margen**: aquel
+que separa las muestras de ambas clases dejando el máximo margen
+posible entre las muestras más cercanas de clases distintas. En el
+caso de clases linealmente separables la aplicación es directa.
+
+```{r include=FALSE}
+knitr::opts_chunk$set(comment = NA, warning=FALSE, collapse=TRUE,fig.align='center')
+# Permite cambiar la fuente
+knitr::knit_hooks$set(mysize = function(before, options, envir) { 
+  if (before) { 
+    return(options$size) 
+  } else { 
+    return("\\normalsize") 
+  } 
+}) 
+library(dplyr)
+library(tidyr)
+```
+
+## Unos datos de ejemplos
+
+Primero vamos a generar los puntos a clasificar:
+
+
+```{r, mysize=TRUE, size="\\scriptsize", out.width='70%',echo=FALSE}
+library('ggplot2')
+```
+
+```{r, mysize=TRUE, size="\\scriptsize", out.width='70%', warning=FALSE,message=FALSE}
+set.seed(1762)
+X1 <- rnorm(n = 30, mean = 2, sd=1)
+X2 <- rnorm(n = 30, mean = 2, sd=1)
+clase <- ifelse((X1 < 1.5) | ((X1 < 2) & (X2 < 2)), 0, 1)
+clase <- as.factor(clase)
+# Escalamos la salida con cero de media y 1 de std
+X1 = scale(X1)
+X2 = scale(X2)
+observaciones <- data.frame(X1=X1, X2=X2, clase=clase)
+head(observaciones, 5)
+```
+
+## Visualizamos los datos
+
+
+```{r, mysize=TRUE, size="\\scriptsize",out.width='65%',warning=FALSE,message=FALSE}
+plot_points <- ggplot(data=observaciones,aes(x=X1, y=X2, color=clase)) +
+geom_point(size=4) +
+labs(title="Datos de referencia") +
+theme_bw() + theme(legend.position = "none", plot.title=element_text(size=25))
+plot_points
+```
+
+## Hiperplanos
+
+Hay múltiples hiperplanos que podrían separarlos
+
+
+```{r, mysize=TRUE, size="\\scriptsize",out.width='65%',warning=FALSE,message=FALSE}
+plot_points +
+geom_abline(intercept = -1.2, slope=-3, linetype='dashed', color='blue') +
+geom_abline(intercept = -1.5, slope=-3.2, linetype='dashed', color='red')  +
+geom_abline(intercept = -1.7, slope=-5, linetype='dashed')
+```
+
+## Clasificación binaria mediante un hiperplano
+
+Se trata de determinar cuál es el mejor plano separador: aquel que permita la
+máxima capacidad de generalización (que esté lo más alejado posible de las
+muestras de ambas clases). Para la determinación del hiperplano separador se
+suelen considerar las muestras más cercanas de clases diferentes. Las muestras
+usadas para determinar el hiperplano se denominan **vectores soporte**.
+
+Para **SVM** en R, existen dos paquetes muy usados, **e1071** y **kernlab**.
+
+----
+
+```{r, mysize=TRUE,size="\\scriptsize",out.width='65%',warning=FALSE,message=FALSE}
+library(e1071)
+# Se indica la clase y que depende del resto intentando separación lineal
+modelo <- e1071::svm(formula = clase ~ X1+X2, data=observaciones,
+                     type='C-classification', kernel="linear",
+                     # No escalamos porque ya están de entrada
+                     cost=50, scale=FALSE)
+# Vemos los datos del modelo
+modelo
+```
+
+Ha elegido 3 puntos para fijar la separación
+
+## Clasificación binaria mediante un hiperplano
+
+Vamos a pintarlos
+
+```{r, mysize=TRUE,size="\\scriptsize",out.width='65%',warning=FALSE,message=FALSE}
+cat('Vectores soporte=', modelo$index, '\n', sep=',')
+```
+
+. . .
+
+Mejor lo mostramos en pantalla, ¿no?
+
+---
+
+```{r, mysize=TRUE,size="\\scriptsize",out.width='70%', warning=FALSE,message=FALSE}
+plot_points +
+geom_point(data=observaciones[modelo$index, ], aes(x=X1, y=X2),
+           shape=21, color="black", size=6)
+```
+
+## Interpretación de los datos
+
+Al aplicarse el modelo lineal se decide la función de decisión como:
+
+$$
+f(X1, X2)=\beta_0+\beta_1\cdot X1 + \beta_2 \cdot X2
+$$
+
+Que se pueden obtener del modelo SVM obtenido
+
+```{r, mysize=TRUE,size="\\scriptsize",out.width='70%', warning=FALSE,message=FALSE}
+coeficientes <- coef(modelo)
+coeficientes
+```
+
+```{r, mysize=TRUE,size="\\scriptsize",out.width='70%', warning=FALSE,message=FALSE}
+cat(coeficientes[1], coeficientes[2], coeficientes[3])
+```
+
+## Creando el hiperplano
+
+A partir de los coeficientes se pueden calcular lo necesario para crear la frontera de precisión:
+la pendiente, y el punto de corte con el eje X1.
+
+$$
+pendiente = -\frac{\beta_1}{\beta_2}
+$$
+$$
+puntocorte = -\frac{\beta_0}{\beta_2}
+$$
+
+## Creando el hiperplano
+
+```{r, mysize=TRUE,size="\\scriptsize",out.width='70%', warning=FALSE,message=FALSE}
+slsvm <- -coeficientes[2]/coeficientes[3]
+intsvm <- -coeficientes[1]/coeficientes[3]
+print(slsvm)
+print(intsvm)
+```
+
+## Pintamos el hiperplano
+
+```{r, mysize=TRUE,size="\\scriptsize",out.width='70%', warning=FALSE,message=FALSE}
+plot_svm <- plot_points + geom_point(data=observaciones[modelo$index, ], aes(x=X1, y=X2),
+           shape=21, color="black", size=6) +
+geom_abline(intercept=intsvm,slope=slsvm)
+plot_svm
+```
+
+## Pintamos los márgenes
+
+Ahora vamos a pintar los márgenes, tienen la misma pendiente conocida `a` y cruzan uno de cada tipo
+
+$$
+intercept\_margin = (y-a\cdot x) \Rightarrow X2-slsvm\cdot X1
+$$
+
+```{r, mysize=TRUE,size="\\scriptsize",out.width='70%', warning=FALSE,message=FALSE}
+svm_points <- observaciones[modelo$index, ]
+first = svm_points[1,]
+second = svm_points[3,]
+coef_first = data.matrix(first[2]-slsvm*first[1])[1]
+coef_second = data.matrix(second[2]-slsvm*second[1])[1]
+coef_first
+```
+
+## Pintamos los márgenes
+
+```{r, mysize=TRUE,size="\\scriptsize",out.width='70%', warning=FALSE,message=FALSE}
+plot_margin <- plot_svm + geom_abline(intercept=coef_first,slope=slsvm, linetype='dashed') +
+geom_abline(intercept=coef_second,slope=slsvm, linetype='dashed')
+plot_margin
+```
+
+# Visualizando la clasificación
+
+La forma más sencilla de visualizar el resultado consiste en el uso
+directo de plot sobre el modelo:
+
+```{r, mysize=TRUE,size="\\scriptsize",out.width='70%', warning=FALSE,message=FALSE}
+# se muestra el grafico que ofrece por defecto para las fronteras
+plot(modelo, observaciones, X1 ~ X2, svSymbol = 1, dataSymbol=19)
+```
+
+---
+
+Podemos ponerlo un poco más bonito
+```{r, mysize=TRUE,size="\\scriptsize",out.width='70%', warning=FALSE,message=FALSE}
+library('RColorBrewer')
+# se muestra el grafico que ofrece por defecto para
+# las fronteras de decision
+plot(modelo, observaciones, X1 ~ X2, symbolPalette = brewer.pal(2, "Greens"),
+svSymbol = 1, dataSymbol=19, color.palette = terrain.colors)
+```
+
+## Visualizando de forma más detallada
+
+Para visualizar la frontera de forma más detallada seguimos la estrategia:
+
+- Hacer una muestra de digamos 300x300 puntos. Obtener un rango de X1 y X2 (300
+  entre el rango). Para cada valor de X1 se prueban los distintos valores de X2.
+
+- Se usa el modelo aprendido para clasificar cada muestra.
+
+- Se representan los puntos generados, coloreados según la precisión.
+
+## Obtención de los parámetros
+
+Primeros generamos una malla
+
+```{r, mysize=TRUE,size="\\scriptsize",out.width='70%', warning=FALSE,message=FALSE}
+# Generamos malla puntos
+get_malla <- function (X1, X2, size) {
+  rangoX1 = range(X1)
+  rangoX2 = range(X2)
+  valoresX1 = seq(from=rangoX1[1], to = rangoX1[2], length=size)
+  valoresX2 = seq(from=rangoX2[1], to = rangoX2[2], length=size)
+  nuevosPuntos = expand.grid(X1=valoresX1, X2=valoresX2)
+  nuevosPuntos
+}
+```
+
+---
+
+```{r, mysize=TRUE,size="\\scriptsize",out.width='70%', warning=FALSE,message=FALSE}
+malla <- get_malla(observaciones$X1, observaciones$X2, 300)
+predicciones <- predict(modelo, newdata=malla)
+plot_margin +
+geom_point(data=malla, aes(x=X1, y=X2, color=as.factor(predicciones)),
+                       size=0.5, alpha=0.1)
+```
+
+## Ejercicio
+
+Vamos a aplicar el SVM se separación lineal sobre un problema, y visualizar los resultados.
+
+Coge el fichero **problema_pinguinos.R** y sigue sus pasos.
+
+# Problemas con más de una clase
+
+## Problemas con más de una clase
+
+- SVM sólo permite separar dos clases, pero **e1071** permite abordar problemas de
+clasificación multiclase. 
+
+Para ello utiliza:
+
+- Estrategia **one-versus-one**. Si hay *k* etiquetas para la variable clase se
+  terminan generando $(k\cdot (k-1))/2$ clases.
+  
+- La clasificación se realiza mediante un sistema de votación.
+# Ajuste de parámetros
+
+## Selección mejor valor de parámetro
+
+El paquete ofrece el método **tune** que permite analizar el rendimiento
+del método de aprendizaje para diferentes valores del parámetro (o
+parámetros). Para ello utiliza el método de validación cruzada de
+forma automática (aplica 10 grupos por defecto).
+
+```{r, mysize=TRUE,size="\\scriptsize",out.width='70%', warning=FALSE,message=FALSE}
+# para este mismo problema buscamos la mejor forma de
+# determinar el valor del parametro C
+set.seed(1762)
+modeloCV <- e1071::tune("svm", clase ~ X1+X2, data=observaciones,
+kernel="linear",
+# Valores de coste a probar
+ranges = list(cost = c(0.001, 0.01, 0.05, 1, 10)))
+```
+
+---
+
+## Selección mejor valor de parámetro
+
+Podemos ver un resumen del objeto final devuelto: 
+
+```{r, mysize=TRUE,size="\\scriptsize",out.width='70%',warning=FALSE,message=FALSE}
+summary(modeloCV)
+```
+
+----
+
+El resumen muestra que de los valores probados para **coste** la mejor medida se
+obtiene para los valores 1 y 10. El método propone el primero, 10.
+
+Recordemos que este valor es más usado antes, por tanto se pone menos énfasis en
+limitar el tamaño con objeto de mejorar el rendimiento.
+
+## Selección mejor valor de parámetro
+
+El resultado al mostrar los valores para cada uno se puede visualizar.
+
+```{r, mysize=TRUE,size="\\scriptsize",out.width='60%',warning=FALSE,message=FALSE}
+ggplot(data=modeloCV$performances, aes(x=cost, y=error)) +
+geom_point() + geom_line()  + labs(title = "Error clasificación / parámetro
+cost") + scale_x_log10() + theme_bw()
+```
+
+## Trabajando con los mejores parámetros
+
+Los mejores valores obtenidos por el turing se encuentra en modeloCV$best.parameters
+
+```{r, mysize=TRUE,size="\\scriptsize",out.width='60%', warning=FALSE,message=FALSE}
+modeloCV$best.parameters
+```
+
+
+
+
+## Otros kernels
+
+Hasta ahora hemos usado kernel lineal, pero podemos aplicar otro tipo de kernel:
+
+- **lineal**, que separa pro hiperplanos.
+- **polynomial**, que utiliza una función polinomial.
+- **radial**, función de base radial también llamado **RBF**.
+- **sigmoid**.
+
+Los lineales son rápidos pero sólo van bien cuando las categorías son
+linealmente separables, y otra opción muy usada son los RBF, los polinomiales
+depende mucho del grado.
+
+## Parámetros de los kernels
+
+- **lineal**, sólo es necesario *cost*, que penaliza el error. Es común a todos.
+
+- **polinomial**: *degree*, que indica el grado. También usa *gamma* (por defecto es 1/dimensión) y coef0 (por defecto 0).
+  
+- **radial**, requiere ajustar tanto *cost* como *gamma*.
+
+## Selección mejor valor de parámetro con kernel polinomial
+
+Sobre este mismo problema probamos el uso de un kernel polinomial de grado 2:
+
+```{r, mysize=TRUE,size="\\scriptsize",out.width='60%',warning=FALSE,message=FALSE}
+# sobre este mismo problema probamos el efecto de aplicar
+# otro tipo de kernel: polinomial
+set.seed(1762)
+modeloCV <- e1071::tune("svm", clase ~ X1+X2, data=observaciones,
+kernel="polynomial",
+degree = 2,
+ranges = list(cost = c(0.001, 0.01, 0.1, 1, 10),
+gamma = c(0.5, 1, 2, 3, 4, 5, 10)))
+modeloCV$best.parameters
+```
+
+## Fronteras de decisión del polinomial
+
+
+```{r,echo=FALSE}
+plot_svm_frontiers <- function(modelo) {
+  plot_svm <- plot_points + geom_point(data=observaciones[modelo$index, ], aes(x=X1, y=X2),
+           shape=21, color="black", size=6)
+  malla <- get_malla(observaciones$X1, observaciones$X2, 300)
+  predicciones <- predict(modelo, newdata=malla)
+  plot_final <- plot_svm +
+geom_point(data=malla, aes(x=X1, y=X2, color=as.factor(predicciones)),
+                       size=0.5, alpha=0.1)
+  plot_final
+} 
+```
+
+```{r, mysize=TRUE,size="\\scriptsize",out.width='60%',warning=FALSE,message=FALSE}
+svm_poly <- e1071::svm(formula = clase ~ X1+X2, data=observaciones,
+                     type='C-classification', kernel="polynomial",
+                     cost=modeloCV$best.parameters$cost, 
+                     gamma=modeloCV$best.parameters$gamma, scale=FALSE)
+plot_svm_frontiers(svm_poly)    
+```
+
+## Fronteras de decisión del radial
+ 
+```{r, mysize=TRUE,size="\\scriptsize",out.width='60%', warning=FALSE,message=FALSE}
+tunedRBF <- e1071::tune("svm", clase ~ X1+X2, data=observaciones,
+kernel="radial",
+ranges = list(cost = c(0.001, 0.01, 0.1, 1, 10),
+gamma = c(0.5, 1, 2, 3, 4, 5, 10)))
+plot_svm_frontiers(tunedRBF$best.model)
+```
+
+## Ejercicio
+
+Vamos a aplicar el SVM con tuning sobre un problema, y con varios kernels.
+
+Coge el fichero **problema_blood.R** y sigue sus pasos.
+
+# Datos no linealmente separables
+
+## Datos no linealmente separables
+
+Vamos a ver cómo se comporta con datos no separables.
+
+Prueba el fichero **prueba_nolineal.R**.
+
+- Con un kernel lineal y radial.
+
+- Prueba el radial con coste (1, 5, 10).
